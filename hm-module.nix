@@ -230,7 +230,7 @@ in {
           fi
 
           # Reference: https://github.com/zen-browser/desktop/blob/4e2dfd8a138fd28767bb4799a3ca9d8aab80430e/src/zen/workspaces/ZenWorkspacesStorage.mjs#L141-L149
-          ${sqlite3} "${placesFile}" ${
+          ${sqlite3} "${placesFile}" "${
             (concatStringsSep " " [
               "INSERT OR REPLACE INTO zen_workspaces ("
               "uuid,"
