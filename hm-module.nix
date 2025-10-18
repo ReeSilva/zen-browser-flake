@@ -2,14 +2,15 @@
   home-manager,
   self,
   name,
-}: {
+}:
+{
   config,
   pkgs,
   lib,
   ...
-}: let
-  inherit
-    (lib)
+}:
+let
+  inherit (lib)
     getAttrFromPath
     isPath
     mkIf
@@ -29,15 +30,12 @@
   linuxConfigPath = ".zen";
   darwinConfigPath = "Library/Application Support/Zen";
 
-  configPath = "${(
-    if pkgs.stdenv.isDarwin
-    then darwinConfigPath
-    else linuxConfigPath
-  )}";
+  configPath = "${(if pkgs.stdenv.isDarwin then darwinConfigPath else linuxConfigPath)}";
   profilesPath = if pkgs.stdenv.isDarwin then "${configPath}/Profiles" else configPath;
 
   mkFirefoxModule = import "${home-manager.outPath}/modules/programs/firefox/mkFirefoxModule.nix";
-in {
+in
+{
   imports = [
     (mkFirefoxModule {
       inherit modulePath;
@@ -61,7 +59,7 @@ in {
   options = setAttrByPath modulePath {
     extraPrefsFiles = mkOption {
       type = types.listOf types.str;
-      default = [];
+      default = [ ];
       description = "List of extra preference files to be included.";
     };
 
@@ -72,10 +70,12 @@ in {
     };
 
     profiles = mkOption {
-      type = with types;
+      type =
+        with types;
         attrsOf (
           submodule (
-            {...}: {
+            { ... }:
+            {
               options = {
                 spacesForce = mkOption {
                   type = bool;
@@ -85,7 +85,8 @@ in {
                 spaces = mkOption {
                   type = attrsOf (
                     submodule (
-                      {name, ...}: {
+                      { name, ... }:
+                      {
                         options = {
                           name = mkOption {
                             type = str;
@@ -104,10 +105,7 @@ in {
                           icon = mkOption {
                             type = nullOr (either str path);
                             description = "Emoji or icon URI to be used as space icon.";
-                            apply = v:
-                              if isPath v
-                              then "file://${v}"
-                              else v;
+                            apply = v: if isPath v then "file://${v}" else v;
                             default = null;
                           };
                           container = mkOption {
@@ -123,7 +121,8 @@ in {
                             type = nullOr (
                               listOf (
                                 submodule (
-                                  {...}: {
+                                  { ... }:
+                                  {
                                     options = {
                                       red = mkOption {
                                         type = ints.between 0 255;
@@ -177,7 +176,7 @@ in {
                                 )
                               )
                             );
-                            default = [];
+                            default = [ ];
                           };
                           theme.opacity = mkOption {
                             type = nullOr float;
@@ -195,7 +194,7 @@ in {
                       }
                     )
                   );
-                  default = {};
+                  default = { };
                 };
                 pinsForce = mkOption {
                   type = bool;
@@ -205,7 +204,8 @@ in {
                 pins = mkOption {
                   type = attrsOf (
                     submodule (
-                      { name, ... }: {
+                      { name, ... }:
+                      {
                         options = {
                           title = mkOption {
                             type = str;
@@ -282,21 +282,19 @@ in {
   config = mkIf cfg.enable {
     programs.zen-browser = {
       package = lib.mkDefault (
-        (pkgs.wrapFirefox (self.packages.${pkgs.stdenv.hostPlatform.system}."${name}-unwrapped".override {
+        (pkgs.wrapFirefox.override { libcanberra-gtk3 = pkgs.libcanberra-gtk2; }
+          (self.packages.${pkgs.stdenv.hostPlatform.system}."${name}-unwrapped".override {
             # Seems like zen uses relative (to the original binary) path to the policies.json file
             # and ignores the overrides by pkgs.wrapFirefox
-            policies = cfg.policies;
-          }) {
-            icon =
-              if name == "beta"
-              then "zen-browser"
-              else "zen-${name}";
-          }).override
-        {
-          extraPrefs = cfg.extraPrefs;
-          extraPrefsFiles = cfg.extraPrefsFiles;
-          nativeMessagingHosts = cfg.nativeMessagingHosts;
-        }
+            inherit (cfg) policies;
+          })
+          {
+            icon = if name == "beta" then "zen-browser" else "zen-${name}";
+          }
+        ).override
+          {
+            inherit (cfg) extraPrefs extraPrefsFiles nativeMessagingHosts;
+          }
       );
 
       policies = {
@@ -305,174 +303,149 @@ in {
       };
     };
 
-    home.file = let
-      inherit
-        (builtins)
-        isNull
-        toJSON
-        toString
-        ;
-      inherit
-        (lib)
-        concatStringsSep
-        concatMapStringsSep
-        concatMapAttrsStringSep
-        filterAttrs
-        getExe
-        getExe'
-        mapAttrs'
-        mapAttrsToList
-        nameValuePair
-        optionalString
-        pipe
-        ;
-    in (mapAttrs' (
-      profileName: profile: let
-        sqlite3 = getExe' pkgs.sqlite "sqlite3";
-        scriptFile = "${profilesPath}/${profileName}/places_update.sh";
-        placesFile = "${config.home.homeDirectory}/${profilesPath}/${profileName}/places.sqlite";
+    home.file =
+      let
+        inherit (builtins)
+          isNull
+          toJSON
+          toString
+          ;
+        inherit (lib)
+          concatStringsSep
+          concatMapStringsSep
+          concatMapAttrsStringSep
+          filterAttrs
+          getExe
+          getExe'
+          mapAttrs'
+          mapAttrsToList
+          nameValuePair
+          optionalString
+          pipe
+          ;
+      in
+      (mapAttrs'
+        (
+          profileName: profile:
+          let
+            sqlite3 = getExe' pkgs.sqlite "sqlite3";
+            scriptFile = "${profilesPath}/${profileName}/places_update.sh";
+            placesFile = "${config.home.homeDirectory}/${profilesPath}/${profileName}/places.sqlite";
 
-        insertSpaces = ''
-                    # Reference: https://github.com/zen-browser/desktop/blob/4e2dfd8a138fd28767bb4799a3ca9d8aab80430e/src/zen/workspaces/ZenWorkspacesStorage.mjs#L25-L55
-                    ${sqlite3} "${placesFile}" "${
-            concatStringsSep " " [
-              "CREATE TABLE IF NOT EXISTS zen_workspaces ("
-              "id INTEGER PRIMARY KEY,"
-              "uuid TEXT UNIQUE NOT NULL,"
-              "name TEXT NOT NULL,"
-              "icon TEXT,"
-              "container_id INTEGER,"
-              "position INTEGER NOT NULL DEFAULT 0,"
-              "created_at INTEGER NOT NULL,"
-              "updated_at INTEGER NOT NULL"
-              ");"
-            ]
-          }" || exit 1
+            insertSpaces = ''
+                        # Reference: https://github.com/zen-browser/desktop/blob/4e2dfd8a138fd28767bb4799a3ca9d8aab80430e/src/zen/workspaces/ZenWorkspacesStorage.mjs#L25-L55
+                        ${sqlite3} "${placesFile}" "${
+                          concatStringsSep " " [
+                            "CREATE TABLE IF NOT EXISTS zen_workspaces ("
+                            "id INTEGER PRIMARY KEY,"
+                            "uuid TEXT UNIQUE NOT NULL,"
+                            "name TEXT NOT NULL,"
+                            "icon TEXT,"
+                            "container_id INTEGER,"
+                            "position INTEGER NOT NULL DEFAULT 0,"
+                            "created_at INTEGER NOT NULL,"
+                            "updated_at INTEGER NOT NULL"
+                            ");"
+                          ]
+                        }" || exit 1
 
-                    columns=($(${sqlite3} "${placesFile}" "SELECT name FROM pragma_table_info('zen_workspaces');"))
-                    if [[ ! "''${columns[@]}" =~ "theme_type" ]]; then
-                      ${sqlite3} "${placesFile}" "ALTER TABLE zen_workspaces ADD COLUMN theme_type TEXT;" || exit 1
-                    fi
-                    if [[ ! "''${columns[@]}" =~ "theme_colors" ]]; then
-                      ${sqlite3} "${placesFile}" "ALTER TABLE zen_workspaces ADD COLUMN theme_colors TEXT;" || exit 1
-                    fi
-                    if [[ ! "''${columns[@]}" =~ "theme_opacity" ]]; then
-                      ${sqlite3} "${placesFile}" "ALTER TABLE zen_workspaces ADD COLUMN theme_opacity REAL;" || exit 1
-                    fi
-                    if [[ ! "''${columns[@]}" =~ "theme_rotation" ]]; then
-                      ${sqlite3} "${placesFile}" "ALTER TABLE zen_workspaces ADD COLUMN theme_rotation INTEGER;" || exit 1
-                    fi
-                    if [[ ! "''${columns[@]}" =~ "theme_texture" ]]; then
-                      ${sqlite3} "${placesFile}" "ALTER TABLE zen_workspaces ADD COLUMN theme_texture REAL;" || exit 1
-                    fi
+                        columns=($(${sqlite3} "${placesFile}" "SELECT name FROM pragma_table_info('zen_workspaces');"))
+                        if [[ ! "''${columns[@]}" =~ "theme_type" ]]; then
+                          ${sqlite3} "${placesFile}" "ALTER TABLE zen_workspaces ADD COLUMN theme_type TEXT;" || exit 1
+                        fi
+                        if [[ ! "''${columns[@]}" =~ "theme_colors" ]]; then
+                          ${sqlite3} "${placesFile}" "ALTER TABLE zen_workspaces ADD COLUMN theme_colors TEXT;" || exit 1
+                        fi
+                        if [[ ! "''${columns[@]}" =~ "theme_opacity" ]]; then
+                          ${sqlite3} "${placesFile}" "ALTER TABLE zen_workspaces ADD COLUMN theme_opacity REAL;" || exit 1
+                        fi
+                        if [[ ! "''${columns[@]}" =~ "theme_rotation" ]]; then
+                          ${sqlite3} "${placesFile}" "ALTER TABLE zen_workspaces ADD COLUMN theme_rotation INTEGER;" || exit 1
+                        fi
+                        if [[ ! "''${columns[@]}" =~ "theme_texture" ]]; then
+                          ${sqlite3} "${placesFile}" "ALTER TABLE zen_workspaces ADD COLUMN theme_texture REAL;" || exit 1
+                        fi
 
-                    # Reference: https://github.com/zen-browser/desktop/blob/4e2dfd8a138fd28767bb4799a3ca9d8aab80430e/src/zen/workspaces/ZenWorkspacesStorage.mjs#L141-L149
-                    ${sqlite3} "${placesFile}" <<-'SQL' || exit 1
-          ${
-            (concatStringsSep " " [
-              "INSERT OR REPLACE INTO zen_workspaces ("
-              "uuid,"
-              "name,"
-              "icon,"
-              "container_id,"
-              "position,"
+                        # Reference: https://github.com/zen-browser/desktop/blob/4e2dfd8a138fd28767bb4799a3ca9d8aab80430e/src/zen/workspaces/ZenWorkspacesStorage.mjs#L141-L149
+                        ${sqlite3} "${placesFile}" <<-'SQL' || exit 1
+              ${
+                (concatStringsSep " " [
+                  "INSERT OR REPLACE INTO zen_workspaces ("
+                  "uuid,"
+                  "name,"
+                  "icon,"
+                  "container_id,"
+                  "position,"
 
-              "theme_type,"
-              "theme_colors,"
-              "theme_opacity,"
-              "theme_rotation,"
-              "theme_texture,"
+                  "theme_type,"
+                  "theme_colors,"
+                  "theme_opacity,"
+                  "theme_rotation,"
+                  "theme_texture,"
 
-              "created_at,"
-              "updated_at"
-              ") VALUES "
-            ])
-            + (pipe profile.spaces [
-              (mapAttrsToList (
-                _: s: [
-                  "'{${s.id}}'"
-                  "'${s.name}'"
-                  (
-                    if isNull s.icon
-                    then "NULL"
-                    else "'${s.icon}'"
-                  )
-                  (
-                    if isNull s.container
-                    then "NULL"
-                    else toString s.container
-                  )
-                  (toString s.position)
-                  (
-                    if isNull s.theme.type
-                    then "NULL"
-                    else "'${s.theme.type}'"
-                  )
-                  (
-                    if isNull s.theme.colors
-                    then "NULL"
-                    else "'${
-                      toJSON (
-                        map (c: {
-                          inherit
-                            (c)
-                            algorithm
-                            lightness
-                            position
-                            type
-                            ;
-                          c = [
-                            c.red
-                            c.green
-                            c.blue
-                          ];
-                          isCustom = c.custom;
-                          isPrimary = c.primary;
-                        })
-                        s.theme.colors
+                  "created_at,"
+                  "updated_at"
+                  ") VALUES "
+                ])
+                + (pipe profile.spaces [
+                  (mapAttrsToList (
+                    _: s: [
+                      "'{${s.id}}'"
+                      "'${s.name}'"
+                      (if isNull s.icon then "NULL" else "'${s.icon}'")
+                      (if isNull s.container then "NULL" else toString s.container)
+                      (toString s.position)
+                      (if isNull s.theme.type then "NULL" else "'${s.theme.type}'")
+                      (
+                        if isNull s.theme.colors then
+                          "NULL"
+                        else
+                          "'${
+                            toJSON (
+                              map (c: {
+                                inherit (c)
+                                  algorithm
+                                  lightness
+                                  position
+                                  type
+                                  ;
+                                c = [
+                                  c.red
+                                  c.green
+                                  c.blue
+                                ];
+                                isCustom = c.custom;
+                                isPrimary = c.primary;
+                              }) s.theme.colors
+                            )
+                          }'"
                       )
-                    }'"
-                  )
-                  (
-                    if isNull s.theme.opacity
-                    then "NULL"
-                    else toString s.theme.opacity
-                  )
-                  (
-                    if isNull s.theme.rotation
-                    then "NULL"
-                    else toString s.theme.rotation
-                  )
-                  (
-                    if isNull s.theme.texture
-                    then "NULL"
-                    else toString s.theme.texture
-                  )
-                  "COALESCE((SELECT created_at FROM zen_workspaces WHERE uuid = '{${s.id}}'), strftime('%s', 'now'))"
-                  "strftime('%s', 'now')"
-                ]
-              ))
-              (map (row: concatStringsSep "," row))
-              (concatMapStringsSep "," (row: "(${row})"))
-            ])
-          }
-          SQL
-        '';
+                      (if isNull s.theme.opacity then "NULL" else toString s.theme.opacity)
+                      (if isNull s.theme.rotation then "NULL" else toString s.theme.rotation)
+                      (if isNull s.theme.texture then "NULL" else toString s.theme.texture)
+                      "COALESCE((SELECT created_at FROM zen_workspaces WHERE uuid = '{${s.id}}'), strftime('%s', 'now'))"
+                      "strftime('%s', 'now')"
+                    ]
+                  ))
+                  (map (row: concatStringsSep "," row))
+                  (concatMapStringsSep "," (row: "(${row})"))
+                ])
+              }
+              SQL
+            '';
 
-        deleteSpaces = ''
-          ${sqlite3} "${placesFile}" "DELETE FROM zen_workspaces ${
-            if profile.spaces != {}
-            then "WHERE "
-            else ""
-          }${concatMapAttrsStringSep " AND " (_: s: "NOT uuid = '{${s.id}}'") profile.spaces}" || exit 1
-        '';
+            deleteSpaces = ''
+              ${sqlite3} "${placesFile}" "DELETE FROM zen_workspaces ${
+                if profile.spaces != { } then "WHERE " else ""
+              }${concatMapAttrsStringSep " AND " (_: s: "NOT uuid = '{${s.id}}'") profile.spaces}" || exit 1
+            '';
 
-        insertPins = ''
-          #Reference https://github.com/zen-browser/desktop/blob/28bf0458e43e2bb741cd67834d2b50ce2b5587c6/src/zen/tabs/ZenPinnedTabsStorage.mjs#L12-L26
-          # Create the pins table if it doesn't exist
-          ${sqlite3} "${placesFile}" "${
-            concatStringsSep " " [
-              "CREATE TABLE IF NOT EXISTS zen_pins ("
+            insertPins = ''
+              #Reference https://github.com/zen-browser/desktop/blob/28bf0458e43e2bb741cd67834d2b50ce2b5587c6/src/zen/tabs/ZenPinnedTabsStorage.mjs#L12-L26
+              # Create the pins table if it doesn't exist
+              ${sqlite3} "${placesFile}" "${
+                concatStringsSep " " [
+                  "CREATE TABLE IF NOT EXISTS zen_pins ("
                   "id INTEGER PRIMARY KEY,"
                   "uuid TEXT UNIQUE NOT NULL,"
                   "title TEXT NOT NULL,"
@@ -484,151 +457,135 @@ in {
                   "is_group BOOLEAN NOT NULL DEFAULT 0,"
                   "created_at INTEGER NOT NULL,"
                   "updated_at INTEGER NOT NULL"
-              ");"
-            ]
-          }" || exit 1
-
-          columns=($(${sqlite3} "${placesFile}" "SELECT name FROM pragma_table_info('zen_pins');"))
-
-          if [[ ! "''${columns[@]}" =~ "edited_title" ]]; then
-            ${sqlite3} "${placesFile}" "ALTER TABLE zen_pins ADD COLUMN edited_title BOOLEAN NOT NULL DEFAULT 0;" || exit 1
-          fi
-          if [[ ! "''${columns[@]}" =~ "is_folder_collapsed" ]]; then
-            ${sqlite3} "${placesFile}" "ALTER TABLE zen_pins ADD COLUMN is_folder_collapsed BOOLEAN NOT NULL DEFAULT 0;" || exit 1
-          fi
-          if [[ ! "''${columns[@]}" =~ "folder_icon" ]]; then
-            ${sqlite3} "${placesFile}" "ALTER TABLE zen_pins ADD COLUMN folder_icon TEXT DEFAULT NULL;" || exit 1
-          fi
-          if [[ ! "''${columns[@]}" =~ "folder_parent_uuid" ]]; then
-            ${sqlite3} "${placesFile}" "ALTER TABLE zen_pins ADD COLUMN folder_parent_uuid TEXT DEFAULT NULL;" || exit 1
-          fi
-
-          # Reference https://github.com/zen-browser/desktop/blob/28bf0458e43e2bb741cd67834d2b50ce2b5587c6/src/zen/tabs/ZenPinnedTabsStorage.mjs#L103-L112
-          # Insert or replace the pin
-          ${sqlite3} "${placesFile}" <<-'SQL' || exit 1
-          ${
-            (concatStringsSep " " [
-              "INSERT OR REPLACE INTO zen_pins ("
-              "uuid,"
-              "title,"
-              "url,"
-              "container_id,"
-              "workspace_uuid,"
-              "position,"
-              "is_essential,"
-              "is_group,"
-              "folder_parent_uuid,"
-              "edited_title,"
-              "created_at,"
-              "updated_at,"
-              "is_folder_collapsed,"
-              "folder_icon"
-              ") VALUES "
-            ])
-            +
-            (pipe profile.pins [
-              (mapAttrsToList (
-                _: p: [
-                  "'{${p.id}}'"
-                  "'${p.title}'"
-                  (
-                    if isNull p.url
-                    then "NULL"
-                    else "'${p.url}'"
-                  )
-                  (
-                    if isNull p.container
-                    then "NULL"
-                    else toString p.container
-                  )
-                  (
-                    if isNull p.workspace
-                    then "NULL"
-                    else "'{${p.workspace}}'"
-                  )
-                  (toString p.position)
-                  (if p.isEssential then "1" else "0")
-                  (if p.isGroup then "1" else "0")
-                  (
-                    if isNull p.folderParentId
-                    then "NULL"
-                    else "'{${p.folderParentId}}'"
-                  )
-                  (if p.editedTitle then "1" else "0")
-                  "COALESCE((SELECT created_at FROM zen_pins WHERE uuid = '{${p.id}}'), strftime('%s', 'now'))"
-                  "strftime('%s', 'now')"
-                  (if p.isFolderCollapsed then "1" else "0")
-                  (
-                    if isNull p.folderIcon
-                    then "NULL"
-                    else "'${p.folderIcon}'"
-                  )
+                  ");"
                 ]
-              ))
-              (map (row: concatStringsSep "," row))
-              (concatMapStringsSep "," (row: "(${row})"))
-            ])
-          }
-          SQL
-        '';
+              }" || exit 1
 
-        deletePins = ''
-          ${sqlite3} "${placesFile}" "DELETE FROM zen_pins ${
-            if profile.pins != {}
-            then "WHERE "
-            else ""
-          }${concatMapAttrsStringSep " AND " (_: p: "NOT uuid = '{${p.id}}'") profile.pins}" || exit 1
-        '';
-      in
-        nameValuePair scriptFile {
-          source = getExe (
-            pkgs.writeShellScriptBin "places_update_${profileName}" ''
-              # This file is generated by Zen browser Home Manager module, please to not change it since it
-              # will be overridden and executed on every rebuild of the home environment.
+              columns=($(${sqlite3} "${placesFile}" "SELECT name FROM pragma_table_info('zen_pins');"))
 
-              function update_places() {
-                ${optionalString (profile.spaces != {}) insertSpaces}
-                ${optionalString (profile.spacesForce) deleteSpaces}
-                ${optionalString (profile.pins != {}) insertPins}
-                ${optionalString (profile.pinsForce) deletePins}
-              }
-
-              error="$(update_places 2>&1 1>/dev/null)"
-              if [[ "$?" -ne 0 ]]; then
-                if [[ "$error" == *"database is locked"* ]]; then
-                  echo "$error"
-
-                  YELLOW="\033[1;33m"
-                  NC="\033[0m"
-                  echo -e "zen-update-places:''${YELLOW} Atempted to update the \"zen_workspaces\" table with values declared in \"programs.zen.profiles.\"${profileName}\".spaces\".''${NC}"
-                  echo -e "zen-update-places:''${YELLOW} Failed to update \"${placesFile}\" due to a Zen browser instance for profile \"${profileName}\" being opened, please close''${NC}"
-                  echo -e "zen-update-places:''${YELLOW} Zen browser and rebuild the home environment to rerun \"home-manager-${config.home.username}.service\" and update places.sqlite.''${NC}"
-                else
-                  echo "$error"
-                fi
-                exit 1
-              else
-                exit 0
+              if [[ ! "''${columns[@]}" =~ "edited_title" ]]; then
+                ${sqlite3} "${placesFile}" "ALTER TABLE zen_pins ADD COLUMN edited_title BOOLEAN NOT NULL DEFAULT 0;" || exit 1
               fi
-            ''
-          );
-          onChange = ''
-            "${config.home.homeDirectory}/${scriptFile}"
-            if [[ "$?" -ne 0 ]]; then
-              RED="\033[0;31m"
-              NC="\033[0m"
-              echo -e "zen-update-places:''${RED} Failed to update places.sqlite file for Zen browser \"${profileName}\" profile.''${NC}"
-            fi
-          '';
-          executable = true;
-          force = true;
-        }
-    ) (filterAttrs (_: profile: profile.spaces != {} || profile.spacesForce || profile.pins != { } || profile.pinsForce) cfg.profiles));
+              if [[ ! "''${columns[@]}" =~ "is_folder_collapsed" ]]; then
+                ${sqlite3} "${placesFile}" "ALTER TABLE zen_pins ADD COLUMN is_folder_collapsed BOOLEAN NOT NULL DEFAULT 0;" || exit 1
+              fi
+              if [[ ! "''${columns[@]}" =~ "folder_icon" ]]; then
+                ${sqlite3} "${placesFile}" "ALTER TABLE zen_pins ADD COLUMN folder_icon TEXT DEFAULT NULL;" || exit 1
+              fi
+              if [[ ! "''${columns[@]}" =~ "folder_parent_uuid" ]]; then
+                ${sqlite3} "${placesFile}" "ALTER TABLE zen_pins ADD COLUMN folder_parent_uuid TEXT DEFAULT NULL;" || exit 1
+              fi
+
+              # Reference https://github.com/zen-browser/desktop/blob/28bf0458e43e2bb741cd67834d2b50ce2b5587c6/src/zen/tabs/ZenPinnedTabsStorage.mjs#L103-L112
+              # Insert or replace the pin
+              ${sqlite3} "${placesFile}" <<-'SQL' || exit 1
+              ${
+                (concatStringsSep " " [
+                  "INSERT OR REPLACE INTO zen_pins ("
+                  "uuid,"
+                  "title,"
+                  "url,"
+                  "container_id,"
+                  "workspace_uuid,"
+                  "position,"
+                  "is_essential,"
+                  "is_group,"
+                  "folder_parent_uuid,"
+                  "edited_title,"
+                  "created_at,"
+                  "updated_at,"
+                  "is_folder_collapsed,"
+                  "folder_icon"
+                  ") VALUES "
+                ])
+                + (pipe profile.pins [
+                  (mapAttrsToList (
+                    _: p: [
+                      "'{${p.id}}'"
+                      "'${p.title}'"
+                      (if isNull p.url then "NULL" else "'${p.url}'")
+                      (if isNull p.container then "NULL" else toString p.container)
+                      (if isNull p.workspace then "NULL" else "'{${p.workspace}}'")
+                      (toString p.position)
+                      (if p.isEssential then "1" else "0")
+                      (if p.isGroup then "1" else "0")
+                      (if isNull p.folderParentId then "NULL" else "'{${p.folderParentId}}'")
+                      (if p.editedTitle then "1" else "0")
+                      "COALESCE((SELECT created_at FROM zen_pins WHERE uuid = '{${p.id}}'), strftime('%s', 'now'))"
+                      "strftime('%s', 'now')"
+                      (if p.isFolderCollapsed then "1" else "0")
+                      (if isNull p.folderIcon then "NULL" else "'${p.folderIcon}'")
+                    ]
+                  ))
+                  (map (row: concatStringsSep "," row))
+                  (concatMapStringsSep "," (row: "(${row})"))
+                ])
+              }
+              SQL
+            '';
+
+            deletePins = ''
+              ${sqlite3} "${placesFile}" "DELETE FROM zen_pins ${if profile.pins != { } then "WHERE " else ""}${
+                concatMapAttrsStringSep " AND " (_: p: "NOT uuid = '{${p.id}}'") profile.pins
+              }" || exit 1
+            '';
+          in
+          nameValuePair scriptFile {
+            source = getExe (
+              pkgs.writeShellScriptBin "places_update_${profileName}" ''
+                # This file is generated by Zen browser Home Manager module, please to not change it since it
+                # will be overridden and executed on every rebuild of the home environment.
+
+                function update_places() {
+                  ${optionalString (profile.spaces != { }) insertSpaces}
+                  ${optionalString (profile.spacesForce) deleteSpaces}
+                  ${optionalString (profile.pins != { }) insertPins}
+                  ${optionalString (profile.pinsForce) deletePins}
+                }
+
+                error="$(update_places 2>&1 1>/dev/null)"
+                if [[ "$?" -ne 0 ]]; then
+                  if [[ "$error" == *"database is locked"* ]]; then
+                    echo "$error"
+
+                    YELLOW="\033[1;33m"
+                    NC="\033[0m"
+                    echo -e "zen-update-places:''${YELLOW} Atempted to update the \"zen_workspaces\" table with values declared in \"programs.zen.profiles.\"${profileName}\".spaces\".''${NC}"
+                    echo -e "zen-update-places:''${YELLOW} Failed to update \"${placesFile}\" due to a Zen browser instance for profile \"${profileName}\" being opened, please close''${NC}"
+                    echo -e "zen-update-places:''${YELLOW} Zen browser and rebuild the home environment to rerun \"home-manager-${config.home.username}.service\" and update places.sqlite.''${NC}"
+                  else
+                    echo "$error"
+                  fi
+                  exit 1
+                else
+                  exit 0
+                fi
+              ''
+            );
+            onChange = ''
+              "${config.home.homeDirectory}/${scriptFile}"
+              if [[ "$?" -ne 0 ]]; then
+                RED="\033[0;31m"
+                NC="\033[0m"
+                echo -e "zen-update-places:''${RED} Failed to update places.sqlite file for Zen browser \"${profileName}\" profile.''${NC}"
+              fi
+            '';
+            executable = true;
+            force = true;
+          }
+        )
+        (
+          filterAttrs (
+            _: profile: profile.spaces != { } || profile.spacesForce || profile.pins != { } || profile.pinsForce
+          ) cfg.profiles
+        )
+      );
 
     # Add activation script to run places update on every rebuild
-    home.activation.updateZenPlaces = lib.hm.dag.entryAfter ["writeBoundary"] (
+    home.activation.updateZenPlaces = lib.hm.dag.entryAfter [ "writeBoundary" ] (
       lib.concatStringsSep "\n" (
-        lib.mapAttrsToList (profileName: profile: 
+        lib.mapAttrsToList (
+          profileName: profile:
           lib.optionalString (profile.spaces != { } || profile.spacesForce) ''
             echo "Updating Zen browser spaces for profile: ${profileName}"
             if [[ -f "${config.home.homeDirectory}/${profilesPath}/${profileName}/places_update.sh" ]]; then
