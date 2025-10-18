@@ -34,6 +34,11 @@ let
   profilesPath = if pkgs.stdenv.isDarwin then "${configPath}/Profiles" else configPath;
 
   mkFirefoxModule = import "${home-manager.outPath}/modules/programs/firefox/mkFirefoxModule.nix";
+  wrapper =
+    if pkgs.stdenv.hostPlatform.isDarwin then
+      pkgs.wrapFirefox.override { libcanberra-gtk3 = pkgs.libcanberra-gtk2; }
+    else
+      pkgs.wrapFirefox;
 in
 {
   imports = [
@@ -282,7 +287,7 @@ in
   config = mkIf cfg.enable {
     programs.zen-browser = {
       package = lib.mkDefault (
-        (pkgs.wrapFirefox.override { libcanberra-gtk3 = pkgs.libcanberra-gtk2; }
+        (wrapper
           (self.packages.${pkgs.stdenv.hostPlatform.system}."${name}-unwrapped".override {
             # Seems like zen uses relative (to the original binary) path to the policies.json file
             # and ignores the overrides by pkgs.wrapFirefox

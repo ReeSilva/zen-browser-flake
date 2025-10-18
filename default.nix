@@ -11,21 +11,22 @@ let
     pkgs.callPackage ./package.nix {
       inherit name variant;
     };
+  wrapper =
+    if pkgs.stdenv.hostPlatform.isDarwin then
+      pkgs.wrapFirefox.override { libcanberra-gtk3 = pkgs.libcanberra-gtk2; }
+    else
+      pkgs.wrapFirefox;
 in
 rec {
   beta-unwrapped = mkZen "beta" "beta";
   twilight-unwrapped = mkZen "twilight" "twilight";
   twilight-official-unwrapped = mkZen "twilight" "twilight-official";
 
-  beta = pkgs.wrapFirefox.override { libcanberra-gtk3 = pkgs.libcanberra-gtk2; } beta-unwrapped {
+  beta = wrapper beta-unwrapped {
     icon = "zen-browser";
   };
-  twilight = pkgs.wrapFirefox.override {
-    libcanberra-gtk3 = pkgs.libcanberra-gtk2;
-  } twilight-unwrapped { };
-  twilight-official = pkgs.wrapFirefox.override {
-    libcanberra-gtk3 = pkgs.libcanberra-gtk2;
-  } twilight-official-unwrapped { };
+  twilight = wrapper twilight-unwrapped { };
+  twilight-official = wrapper twilight-official-unwrapped { };
 
   default = beta;
 }
